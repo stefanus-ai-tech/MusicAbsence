@@ -2,15 +2,33 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Users, Clock } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
+import { useRole } from "@/contexts/RoleContext";
+import { rolePermissions } from "@/types/roles";
+import { ClassForm } from "@/components/classes/ClassForm";
+import { ClassDetails } from "@/components/classes/ClassDetails";
+
+interface Class {
+  id: number;
+  name: string;
+  students: number;
+  schedule: string;
+  instructor: string;
+  grade: string;
+  description: string;
+  capacity: number;
+  duration: string;
+}
 
 const Classes = () => {
+  const { role } = useRole();
+  const permissions = rolePermissions[role];
   const [searchQuery, setSearchQuery] = useState("");
-  const [classes, setClasses] = useState([
+  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  
+  const [classes, setClasses] = useState<Class[]>([
     { 
       id: 1,
       name: "Piano Beginners", 
@@ -33,46 +51,33 @@ const Classes = () => {
       capacity: 5,
       duration: "60 minutes"
     },
-    { 
-      id: 3,
-      name: "Guitar Intermediate", 
-      students: 4, 
-      schedule: "Fri 14:00", 
-      instructor: "Mike Johnson",
-      grade: "Grade 2",
-      description: "Intermediate guitar lessons",
-      capacity: 6,
-      duration: "45 minutes"
-    },
   ]);
 
-  const [newClass, setNewClass] = useState({
-    name: "",
-    instructor: "",
-    schedule: "",
-    grade: "",
-    capacity: "",
-    duration: "",
-    description: ""
-  });
-
-  const handleCreateClass = () => {
-    const classData = {
+  const handleCreateClass = (formData: Omit<Class, "id" | "students">) => {
+    const newClass = {
       id: classes.length + 1,
-      ...newClass,
       students: 0,
+      ...formData,
     };
-    setClasses([...classes, classData]);
-    toast.success("New class created successfully!");
-    setNewClass({
-      name: "",
-      instructor: "",
-      schedule: "",
-      grade: "",
-      capacity: "",
-      duration: "",
-      description: ""
-    });
+    setClasses([...classes, newClass]);
+  };
+
+  const handleUpdateClass = (formData: Omit<Class, "id" | "students">) => {
+    if (!selectedClass) return;
+    
+    const updatedClass = {
+      ...selectedClass,
+      ...formData,
+    };
+    
+    setClasses(classes.map(c => c.id === selectedClass.id ? updatedClass : c));
+    setSelectedClass(null);
+    setIsEditing(false);
+  };
+
+  const handleDeleteClass = (id: number) => {
+    setClasses(classes.filter(c => c.id !== id));
+    setSelectedClass(null);
   };
 
   const filteredClasses = classes.filter(cls =>
@@ -86,87 +91,22 @@ const Classes = () => {
           <h1 className="text-2xl font-semibold text-gray-900">Classes</h1>
           <p className="text-gray-500">Manage your music classes</p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="sm:self-start">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Class
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Create New Class</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Class Name</Label>
-                <Input
-                  id="name"
-                  value={newClass.name}
-                  onChange={(e) => setNewClass({...newClass, name: e.target.value})}
-                  placeholder="Enter class name"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="instructor">Instructor</Label>
-                <Input
-                  id="instructor"
-                  value={newClass.instructor}
-                  onChange={(e) => setNewClass({...newClass, instructor: e.target.value})}
-                  placeholder="Enter instructor name"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="schedule">Schedule</Label>
-                <Input
-                  id="schedule"
-                  value={newClass.schedule}
-                  onChange={(e) => setNewClass({...newClass, schedule: e.target.value})}
-                  placeholder="e.g., Mon, Wed 15:00"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="grade">Grade Level</Label>
-                <Input
-                  id="grade"
-                  value={newClass.grade}
-                  onChange={(e) => setNewClass({...newClass, grade: e.target.value})}
-                  placeholder="Enter grade level"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="capacity">Capacity</Label>
-                  <Input
-                    id="capacity"
-                    value={newClass.capacity}
-                    onChange={(e) => setNewClass({...newClass, capacity: e.target.value})}
-                    placeholder="Max students"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="duration">Duration</Label>
-                  <Input
-                    id="duration"
-                    value={newClass.duration}
-                    onChange={(e) => setNewClass({...newClass, duration: e.target.value})}
-                    placeholder="e.g., 45 minutes"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  value={newClass.description}
-                  onChange={(e) => setNewClass({...newClass, description: e.target.value})}
-                  placeholder="Enter class description"
-                />
-              </div>
-              <Button onClick={handleCreateClass}>Create Class</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {permissions.canCreate && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="sm:self-start">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Class
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Class</DialogTitle>
+              </DialogHeader>
+              <ClassForm onSubmit={handleCreateClass} mode="create" />
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Card className="p-6">
@@ -194,54 +134,26 @@ const Classes = () => {
                   <p className="text-sm text-gray-500">Instructor: {cls.instructor}</p>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <Users className="h-3 w-3" />
-                  {cls.students} students
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {cls.schedule}
-                </Badge>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      View Details
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>{cls.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-3 items-center gap-4">
-                        <Label>Instructor</Label>
-                        <span className="col-span-2">{cls.instructor}</span>
-                      </div>
-                      <div className="grid grid-cols-3 items-center gap-4">
-                        <Label>Schedule</Label>
-                        <span className="col-span-2">{cls.schedule}</span>
-                      </div>
-                      <div className="grid grid-cols-3 items-center gap-4">
-                        <Label>Grade Level</Label>
-                        <span className="col-span-2">{cls.grade}</span>
-                      </div>
-                      <div className="grid grid-cols-3 items-center gap-4">
-                        <Label>Students</Label>
-                        <span className="col-span-2">{cls.students} / {cls.capacity}</span>
-                      </div>
-                      <div className="grid grid-cols-3 items-center gap-4">
-                        <Label>Duration</Label>
-                        <span className="col-span-2">{cls.duration}</span>
-                      </div>
-                      <div className="grid grid-cols-3 items-center gap-4">
-                        <Label>Description</Label>
-                        <span className="col-span-2">{cls.description}</span>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    View Details
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Class Details</DialogTitle>
+                  </DialogHeader>
+                  <ClassDetails
+                    classData={cls}
+                    onEdit={() => {
+                      setSelectedClass(cls);
+                      setIsEditing(true);
+                    }}
+                    onDelete={() => handleDeleteClass(cls.id)}
+                  />
+                </DialogContent>
+              </Dialog>
             </div>
           ))}
           {filteredClasses.length === 0 && (
@@ -251,6 +163,21 @@ const Classes = () => {
           )}
         </div>
       </Card>
+
+      {isEditing && selectedClass && (
+        <Dialog open={isEditing} onOpenChange={(open) => !open && setIsEditing(false)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Class</DialogTitle>
+            </DialogHeader>
+            <ClassForm
+              mode="edit"
+              initialData={selectedClass}
+              onSubmit={handleUpdateClass}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
